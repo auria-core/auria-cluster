@@ -1,0 +1,15 @@
+[package]
+name = "auria-cluster"
+version = "0.1.0"
+edition = "2021"
+license = "Apache-2.0"
+repository = "https://github.com/auria-core/auria-runtime"
+authors = ["AURIA Team <auria@dust.llc>"]
+description = "AURIA Runtime Core - Cluster coordination"
+
+[dependencies]
+auria-core = { path = "../auria-core", version = "0.1.0"}
+auria-network = { path = "../auria-network", version = "0.1.0"}
+anyhow = "1.0"
+tokio = { version = "1.35", features = ["rt-multi-thread", "macros", "time", "signal"] }
+serde = { version = "1.0", features = ["derive"] }
