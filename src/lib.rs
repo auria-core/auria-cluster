@@ -1,10 +1,11 @@
-use auria_core::{AuriaResult, ExpertId, ShardId, Tier};
+use auria_core::{AuriaResult, ExpertId, Tier};
 
 pub struct ClusterCoordinator {
     node_id: String,
     workers: Vec<WorkerNode>,
 }
 
+#[derive(Clone)]
 pub struct WorkerNode {
     pub id: String,
     pub address: String,
@@ -34,8 +35,8 @@ impl ClusterCoordinator {
         }
         let mut distribution = Vec::new();
         for (i, expert_id) in expert_ids.iter().enumerate() {
-            let worker = &self.workers[i % self.workers.len()];
-            distribution.push((worker.clone(), vec![*expert_id]));
+            let worker = self.workers[i % self.workers.len()].clone();
+            distribution.push((worker, vec![*expert_id]));
         }
         Ok(distribution)
     }
