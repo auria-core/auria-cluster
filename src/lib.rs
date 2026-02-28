@@ -1,3 +1,10 @@
+// File: lib.rs - This file is part of AURIA
+// Copyright (c) 2026 AURIA Developers and Contributors
+// Description:
+//     Cluster coordination for distributed execution in AURIA Runtime Core.
+//     Manages worker nodes and coordinates distributed expert execution
+//     across a cluster for the Max tier.
+//
 use auria_core::{AuriaResult, ExpertId, Tier};
 
 pub struct ClusterCoordinator {
