@@ -13,3 +13,4 @@ auria-network = { path = "../auria-network", version = "0.1.0"}
 anyhow = "1.0"
 tokio = { version = "1.35", features = ["rt-multi-thread", "macros", "time", "signal"] }
 serde = { version = "1.0", features = ["derive"] }
+uuid = { version = "1", features = ["v4"] }
