@@ -327,7 +327,7 @@ impl ClusterCoordinator {
         let mut distribution = Vec::new();
         for (i, expert_id) in expert_ids.iter().enumerate() {
             let worker = available[i % available.len()].clone();
-            distribution.push((worker, vec![*expert_id]));
+            distribution.push((worker, vec![expert_id.clone()]));
         }
 
         Ok(distribution)
