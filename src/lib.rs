@@ -5,11 +5,14 @@
 //     Manages worker nodes and coordinates distributed expert execution
 //     across a cluster for the Max tier.
 //
-use auria_core::{AuriaError, AuriaResult, ExpertId, PublicKey, RequestId, ShardId, Tier};
+pub mod raft;
+
+use auria_core::{AuriaError, AuriaResult, ExpertId, RequestId, Tier};
+use crate::raft::{RaftNode, RaftConfig, ClusterInfo, NodeRole};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::Arc;
-use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::sync::RwLock;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -49,6 +52,8 @@ pub struct ClusterCoordinator {
     failed_tasks: Arc<RwLock<Vec<RequestId>>>,
     gossip_state: Arc<RwLock<GossipState>>,
     last_heartbeat: Arc<RwLock<HashMap<String, u64>>>,
+    raft_node: Option<Arc<RaftNode>>,
+    cluster_nodes: Arc<RwLock<HashSet<String>>>,
 }
 
 #[derive(Clone, Debug)]
@@ -181,6 +186,8 @@ impl ClusterCoordinator {
             failed_tasks: Arc::new(RwLock::new(Vec::new())),
             gossip_state: Arc::new(RwLock::new(GossipState::new())),
             last_heartbeat: Arc::new(RwLock::new(HashMap::new())),
+            raft_node: None,
+            cluster_nodes: Arc::new(RwLock::new(HashSet::new())),
         }
     }
 
@@ -199,6 +206,82 @@ impl ClusterCoordinator {
             failed_tasks: Arc::new(RwLock::new(Vec::new())),
             gossip_state: Arc::new(RwLock::new(GossipState::new())),
             last_heartbeat: Arc::new(RwLock::new(HashMap::new())),
+            raft_node: None,
+            cluster_nodes: Arc::new(RwLock::new(HashSet::new())),
+        }
+    }
+
+    pub async fn init_raft(&mut self, peers: Vec<String>) -> AuriaResult<()> {
+        let raft_config = RaftConfig {
+            election_timeout_min_ms: self.config.election_timeout_ms / 2,
+            election_timeout_max_ms: self.config.election_timeout_ms,
+            heartbeat_interval_ms: self.config.heartbeat_interval_ms,
+            min_election_quorum: (peers.len() + 1) / 2 + 1,
+            max_log_entries_per_snapshot: 1000,
+        };
+        
+        let node_id = self.node_id.clone();
+        let raft = Arc::new(RaftNode::new(node_id.clone(), raft_config).with_peers(peers.clone()));
+        
+        raft.start().await?;
+        
+        let peers_count = peers.len();
+        {
+            let mut cluster_nodes = self.cluster_nodes.write().await;
+            for peer in peers {
+                cluster_nodes.insert(peer);
+            }
+        }
+        
+        self.raft_node = Some(raft);
+        tracing::info!("Initialized Raft for node {} with {} peers", node_id, peers_count);
+        Ok(())
+    }
+
+    pub async fn start_raft(&self) -> AuriaResult<()> {
+        if let Some(ref raft) = self.raft_node {
+            raft.start().await?;
+        }
+        Ok(())
+    }
+
+    pub async fn stop_raft(&self) {
+        if let Some(ref raft) = self.raft_node {
+            raft.stop().await;
+        }
+    }
+
+    pub async fn sync_with_leader(&self) -> bool {
+        if let Some(ref raft) = self.raft_node {
+            if raft.is_leader().await {
+                return true;
+            }
+            
+            if let Some(leader_id) = raft.get_leader_id().await {
+                tracing::debug!("Following leader: {}", leader_id);
+                *self.leader_id.write().await = Some(leader_id);
+                return false;
+            }
+        }
+        false
+    }
+
+    pub async fn get_raft_info(&self) -> Option<ClusterInfo> {
+        if let Some(ref raft) = self.raft_node {
+            Some(raft.get_cluster_info().await)
+        } else {
+            None
+        }
+    }
+
+    pub async fn propose_task(&self, task_data: Vec<u8>) -> AuriaResult<u64> {
+        if let Some(ref raft) = self.raft_node {
+            if !raft.is_leader().await {
+                return Err(AuriaError::ClusterError("Not the leader, cannot propose".to_string()));
+            }
+            raft.propose(task_data).await
+        } else {
+            Err(AuriaError::ClusterError("Raft not initialized".to_string()))
         }
     }
 

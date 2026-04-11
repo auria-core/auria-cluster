@@ -9,8 +9,13 @@ description = "AURIA Runtime Core - Cluster coordination"
 
 [dependencies]
 auria-core = { path = "../auria-core", version = "0.1.0"}
-auria-network = { path = "../auria-network", version = "0.1.0"}
 anyhow = "1.0"
-tokio = { version = "1.35", features = ["rt-multi-thread", "macros", "time", "signal"] }
+tokio = { version = "1.35", features = ["rt-multi-thread", "macros", "time", "signal", "sync"] }
 serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
 uuid = { version = "1", features = ["v4"] }
+async-trait = "0.1"
+sha3 = "0.10"
+rand = "0.8"
+hex = "0.4"
+tracing = "0.1"
