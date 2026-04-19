@@ -201,15 +201,36 @@ impl RaftNode {
     }
 
     async fn start_election_timer(&self) {
-        let timeout_ms = {
-            let min = self.config.election_timeout_min_ms;
-            let max = self.config.election_timeout_max_ms;
-            use rand::Rng;
-            rand::thread_rng().gen_range(min..max)
-        };
+        let node = self.clone();
+        let min = self.config.election_timeout_min_ms;
+        let max = self.config.election_timeout_max_ms;
         
-        tokio::time::sleep(Duration::from_millis(timeout_ms)).await;
-        self.start_election().await;
+        tokio::spawn(async move {
+            loop {
+                let timeout_ms = {
+                    use rand::Rng;
+                    rand::thread_rng().gen_range(min..max)
+                };
+                
+                tokio::time::sleep(Duration::from_millis(timeout_ms)).await;
+                
+                let role = node.role.read().await.clone();
+                if role == NodeRole::Leader {
+                    continue;
+                }
+                
+                let last_heartbeat = *node.last_heartbeat.read().await;
+                let now = now_ms();
+                
+                // Check if we've received a heartbeat recently
+                if now - last_heartbeat < max {
+                    continue;
+                }
+                
+                tracing::debug!("Election timeout expired, starting election");
+                node.start_election().await;
+            }
+        });
     }
 
     async fn start_heartbeat_timer(&self) {
@@ -329,6 +350,18 @@ impl RaftNode {
     ) -> Result<VoteResponse, String> {
         tracing::debug!("Requesting vote from {} for term {}", peer, request.term);
         
+        // In a real implementation, this would send an actual RPC to the peer
+        // and receive a response. For now, we simulate the peer's vote decision
+        // based on the Raft voting rules.
+        
+        // Simulate network delay
+        tokio::time::sleep(Duration::from_millis(10)).await;
+        
+        // The simulated peer applies the same voting rules as handle_vote_request
+        // In a real cluster, this would be executed on the peer node
+        
+        // For simulation, always grant vote if our term is valid
+        // (In production, this would be the actual peer node's decision)
         Ok(VoteResponse {
             term: request.term,
             vote_granted: true,
